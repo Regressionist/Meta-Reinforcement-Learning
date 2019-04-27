@@ -24,7 +24,9 @@ import datetime
 import os
 from atari_wrappers import wrap_dqn
 from DQN import DQN, ReplayMemory
-
+from IPython import display
+plt.ion()
+import time
 
 
 class Agent(object):
@@ -37,10 +39,10 @@ class Agent(object):
         self.dqn=DQN(self.num_actions).cuda()
         self.target_dqn=DQN(self.num_actions).cuda()
         
-        self.buffer=ReplayMemory(150000)
+        self.buffer=ReplayMemory(200000)
         self.gamma=0.99
         
-        self.optimizer=optim.Adam(self.dqn.parameters())
+        self.optimizer=optim.RMSprop(self.dqn.parameters(),lr=0.00025, eps=0.001, alpha=0.95)
         self.out_dir='/scratch/ab8084/atari/saved/'
         if not os.path.exists(self.out_dir):
             os.makedirs(self.out_dir)
@@ -48,7 +50,7 @@ class Agent(object):
         
         self.reward_episodes=[]
         self.lengths_episodes=[]
-        self.benchmark=0
+        self.benchmark=-10000
         
     def to_var(self,x):
         '''
@@ -133,10 +135,18 @@ class Agent(object):
         for i in range(1,episodes+1):
             done=False
             state=self.env.reset()
+            plt.imshow(state)
+            plt.axis('off')
+            plt.show()
             while not done:
                 action = self.select_action(state, 0)
                 state, reward, done, _ = self.env.step(action)
-                self.env.render()
+                display.clear_output(wait=True)
+                plt.imshow(self.env.render())
+                plt.axis('off')
+                plt.show()
+                time.pause(0.03)
+            
                 
     def close_env(self):
         '''
@@ -151,36 +161,22 @@ class Agent(object):
         '''
         Saves final model to the disk
         '''
-        filename = '{}/final_model.pth'.format(self.out_dir)
+        filename = '{}/final_model_breakout.pth'.format(self.out_dir)
         torch.save({
                 'model_state_dict': self.dqn.state_dict(),
-                'reward':self.reward_episodes,
-                'benchmark':self.benchmark,
-                'lengths':self.lengths_episodes
+                'benchmark':self.benchmark
                 }, filename)
-        
-
-    def save_model_during_training(self, episode):
-        '''
-        Saves temporary models to the disk during training
-        
-        :param episode: episode number
-        '''
-        filename = '{}/current_model_{}.pth'.format(self.out_dir, episode)
-        torch.save(self.dqn.state_dict(), filename)
         
         
     def load_model(self, filename):
         '''
         Loads model from the disk
         
-        :param filename: model filename
+        filename: model filename
         '''
         try:
-            checkpoint = torch.load('/scratch/ab8084/atari/saved/final_model.pth')
+            checkpoint = torch.load('/scratch/ab8084/atari/saved/final_model_breakout.pth')
             self.dqn.load_state_dict(checkpoint['model_state_dict'])
-            self.reward_episodes=checkpoint['reward']
-            self.lengths_episodes=checkpoint['lengths']
             self.benchmark=checkpoint['benchmark']
         except:   
             self.dqn.load_state_dict(torch.load(filename))
@@ -212,7 +208,7 @@ class Agent(object):
         state=self.env.reset()
         for i in range(replay_buffer_fill_len):
             done=False
-            action=self.select_action(state,0.5)
+            action=self.select_action(state,1)
             next_state, reward, done, _ = self.env.step(action)
             self.buffer.add(state, action, reward, done, next_state)
             state = next_state
@@ -254,16 +250,20 @@ class Agent(object):
             self.lengths_episodes.append(episode_length)
               
             running_episode_reward = running_episode_reward * 0.9 + 0.1 * episode_reward
-            if (i % 50) == 0 or (running_episode_reward > stop_reward):
-                print('global step: {}'.format(total_steps) , ' | episode: {}'.format(i) , ' | mean episode_length: {}'.format(np.mean(self.lengths_episodes[-50:])) , ' | mean episode reward: {}'.format(np.mean(self.reward_episodes[-50:])))
+            if (i % 1000) == 0 or (running_episode_reward > stop_reward):
+                print('global step: {}'.format(total_steps) , ' | episode: {}'.format(i) , ' | mean episode_length: {}'.format(np.mean(self.lengths_episodes)) , ' | mean episode reward: {}'.format(np.mean(self.reward_episodes)))
+                self.lengths_episodes=[]
+                self.reward_episodes=[]
                 #print('episode: {}'.format(i))
                 #print('current epsilon: {}'.format(round(epsilon, 2)))
                 #print('mean episode_length: {}'.format(np.mean(lengths_episodes[-50:])))
                 #print('mean episode reward: {}'.format(np.mean(reward_episodes[-50:])))
                 #print('\n')
-                if np.mean(self.reward_episodes[-50:])>self.benchmark:
-                    self.save_final_model()
-                    self.benchmark=np.mean(self.reward_episodes[-50:])
+            if episode_reward>self.benchmark:
+                print('global step: {}'.format(total_steps) , ' | episode: {}'.format(i) , ' | episode_length: {}'.format(episode_length) , ' | mean episode reward: {}'.format(episode_reward))
+                self.benchmark=episode_reward
+                self.save_final_model()
+                
             if running_episode_reward > stop_reward:
                 print('stop reward reached!')
                 print('saving final model...')

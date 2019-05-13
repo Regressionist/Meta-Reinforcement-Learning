@@ -33,8 +33,8 @@ class Agent(object):
     '''
     Implements training and testing methods
     '''
-    def __init__(self):
-        self.env=wrap_dqn(gym.make('BreakoutDeterministic-v4'))
+    def __init__(self,skip=True,episodic=True):
+        self.env=wrap_dqn(gym.make('BreakoutDeterministic-v4'),skip,episodic)
         self.num_actions=self.env.action_space.n
         self.dqn=DQN(self.num_actions).cuda()
         self.target_dqn=DQN(self.num_actions).cuda()
@@ -161,10 +161,12 @@ class Agent(object):
         '''
         Saves final model to the disk
         '''
-        filename = '{}/final_model_breakout.pth'.format(self.out_dir)
+        filename = '{}/final_model_breakout_skipTrue.pth'.format(self.out_dir)
         torch.save({
                 'model_state_dict': self.dqn.state_dict(),
-                'benchmark':self.benchmark
+                'benchmark':self.benchmark,
+                'lenghts_rewards':self.lengths_episodes,
+                'rewards_episodes':self.reward_episodes
                 }, filename)
         
         
@@ -175,7 +177,7 @@ class Agent(object):
         filename: model filename
         '''
         try:
-            checkpoint = torch.load('/scratch/ab8084/atari/saved/final_model_breakout.pth')
+            checkpoint = torch.load('/scratch/ab8084/atari/saved/final_model_breakout_skipTrue.pth')
             self.dqn.load_state_dict(checkpoint['model_state_dict'])
             self.benchmark=checkpoint['benchmark']
         except:   
@@ -208,7 +210,7 @@ class Agent(object):
         state=self.env.reset()
         for i in range(replay_buffer_fill_len):
             done=False
-            action=self.select_action(state,1)
+            action=self.select_action(state,0.05)
             next_state, reward, done, _ = self.env.step(action)
             self.buffer.add(state, action, reward, done, next_state)
             state = next_state
@@ -251,16 +253,16 @@ class Agent(object):
               
             running_episode_reward = running_episode_reward * 0.9 + 0.1 * episode_reward
             if (i % 1000) == 0 or (running_episode_reward > stop_reward):
-                print('global step: {}'.format(total_steps) , ' | episode: {}'.format(i) , ' | mean episode_length: {}'.format(np.mean(self.lengths_episodes)) , ' | mean episode reward: {}'.format(np.mean(self.reward_episodes)))
-                self.lengths_episodes=[]
-                self.reward_episodes=[]
+                print('global step: {}'.format(total_steps) , ' | episode: {}'.format(i) , ' | mean episode_length: {}'.format(np.mean(self.lengths_episodes[-1000:])) , ' | mean episode reward: {}'.format(np.mean(self.reward_episodes[-1000:])))
+                #self.lengths_episodes=[]
+                #self.reward_episodes=[]
                 #print('episode: {}'.format(i))
                 #print('current epsilon: {}'.format(round(epsilon, 2)))
                 #print('mean episode_length: {}'.format(np.mean(lengths_episodes[-50:])))
                 #print('mean episode reward: {}'.format(np.mean(reward_episodes[-50:])))
                 #print('\n')
             if episode_reward>self.benchmark:
-                print('global step: {}'.format(total_steps) , ' | episode: {}'.format(i) , ' | episode_length: {}'.format(episode_length) , ' | mean episode reward: {}'.format(episode_reward))
+                print('global step: {}'.format(total_steps) , ' | episode: {}'.format(i) , ' | episode_length: {}'.format(episode_length) , ' | episode reward: {}'.format(episode_reward))
                 self.benchmark=episode_reward
                 self.save_final_model()
                 

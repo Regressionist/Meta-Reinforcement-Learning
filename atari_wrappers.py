@@ -9,12 +9,16 @@ from collections import deque
 from gym import spaces
 
 
-def wrap_dqn(env):
+def wrap_dqn(env,skip=True,episodic=True):
     """Apply a common set of wrappers for Atari games."""
     if 'FIRE' in env.unwrapped.get_action_meanings():
         env = FireResetEnv(env)
-    env = EpisodicLifeEnv(env)
-    env = MaxAndSkipEnv(env, skip=4)
+    if episodic:
+        env = EpisodicLifeEnv(env)
+    
+    env=NoopResetEnv(env)
+    if skip:
+        env = MaxAndSkipEnv(env, skip=4)
     env = ProcessFrame84(env)
     env = FrameStack(env, 4)
     return env
@@ -95,9 +99,9 @@ class ProcessFrame84(gym.ObservationWrapper):
     @staticmethod
     def process(img):
         img = img[:, :, 0] * 0.299 + img[:, :, 1] * 0.587 + img[:, :, 2] * 0.114
-        resized_screen = cv2.resize(img, (84, 110), interpolation=cv2.INTER_AREA)
-        x_t = resized_screen[18:102, :]
-        x_t = np.reshape(x_t, [1,84, 84])
+        resized_screen = cv2.resize(img, (84, 84), interpolation=cv2.INTER_AREA)
+        #x_t = resized_screen[18:102, :]
+        x_t = np.reshape(resized_screen, [1,84, 84])
         return x_t.astype(np.uint8)
 
 

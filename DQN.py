@@ -31,11 +31,11 @@ class DQN(nn.Module):
     def __init__(self, num_actions):
         super(DQN, self).__init__()
         self.conv1 = nn.Conv2d(4, 32, kernel_size=8, stride=4, padding=0)
-        # self.bn1 = nn.BatchNorm2d(16)
+        self.bn1 = nn.BatchNorm2d(32)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0)
-        # self.bn2 = nn.BatchNorm2d(32)
+        self.bn2 = nn.BatchNorm2d(64)
         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0)
-        # self.bn3 = nn.BatchNorm2d(64)
+        self.bn3 = nn.BatchNorm2d(64)
         
         self.fc1 = nn.Linear(7 * 7 * 64, 512)
         self.fc2 = nn.Linear(512, num_actions)
@@ -46,9 +46,9 @@ class DQN(nn.Module):
         
         inputs: images. expected sshape is (batch_size, frames, width, height)
         '''
-        out = F.relu(self.conv1(inputs))
-        out = F.relu(self.conv2(out))
-        out = F.relu(self.conv3(out))
+        out = F.relu(self.bn1(self.conv1(inputs)))
+        out = F.relu(self.bn2(self.conv2(out)))
+        out = F.relu(self.bn3(self.conv3(out)))
         
         out = out.view(out.size(0), -1)
         out = F.relu(self.fc1(out))
